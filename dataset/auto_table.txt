@@ -1,0 +1,7 @@
+../dataset/00000.jpg 797 512
+../dataset/00001.jpg 756 473
+../dataset/00002.jpg 713 447
+../dataset/00003.jpg 673 446
+../dataset/00004.jpg 627 446
+../dataset/00005.jpg 589 446
+../dataset/00006.jpg 542 446

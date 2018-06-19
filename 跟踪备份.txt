@@ -1,0 +1,132 @@
+//
+// Created by kono on 18-6-1.
+//
+#include <opencv2/opencv.hpp>
+#include <iostream>
+#include <string>
+#include <vector>
+#include <xl320.hpp>
+using namespace std;
+using namespace cv;
+
+// windows and trackbars name
+const std::string windowName = "Demo";
+XL320 mydxl = XL320();
+
+void moveDXL(int8_t id, int16_t position, int16_t velocity)
+{
+	mydxl.setGoalVelocity(id, velocity);
+	mydxl.setGoalPosition(id, position);
+}
+
+// trackbars name
+const std::string cannyThresholdTrackbarName = "Canny threshold";
+const std::string accumulatorThresholdTrackbarName = "Accumulator Threshold";
+
+// initial and max values of the parameters of interests.
+const int cannyThresholdInitialValue = 60;
+const int accumulatorThresholdInitialValue = 40;
+const int maxAccumulatorThreshold = 200;
+const int maxCannyThreshold = 255;
+
+int main(int argc, char **argv)
+{
+	VideoCapture cap(1);
+	Mat frame;
+	Mat frame_gray;
+	vector<Vec3f> circles;
+	vector<vector<Point>> contours;
+	int dxl1, dxl2;
+	int cannyThreshold = cannyThresholdInitialValue;
+	int accumulatorThreshold = accumulatorThresholdInitialValue;
+	bool isRun = false;
+
+	if (mydxl.init())
+	{
+		mydxl.setLED(1, 5);
+		mydxl.setLED(2, 5);
+		while (cap.isOpened())
+		{
+			//Í¼ÏñÔ¤´¦Àí
+			cap >> frame;
+			cv::circle(frame, cv::Point(320, 240), 50, cv::Scalar(0, 255, 0), 1);
+			cvtColor(frame, frame_gray, COLOR_BGR2GRAY);
+
+			GaussianBlur(frame_gray, frame_gray, Size(9, 9), 2, 2);
+
+			namedWindow(windowName, WINDOW_AUTOSIZE);
+			createTrackbar(cannyThresholdTrackbarName, windowName, &cannyThreshold, maxCannyThreshold);
+			createTrackbar(accumulatorThresholdTrackbarName, windowName, &accumulatorThreshold, maxAccumulatorThreshold);
+			cannyThreshold = std::max(cannyThreshold, 1);
+			accumulatorThreshold = std::max(accumulatorThreshold, 1);
+
+			//»ô·òÔ²¼ì²â£¬½«Í¼ÖÐµÄÔ²´æÈëcirclesÖÐ
+			HoughCircles(frame_gray, circles, CV_HOUGH_GRADIENT, 1, frame_gray.rows / 8, cannyThreshold, accumulatorThreshold, 0, 0);
+
+			Point2f center;
+			float radius;
+			Moments mu;
+			Vec3f circle1;
+			float maxArea = 0.0;
+			bool isDetected = false;
+
+			if (!circles.empty())
+			{
+				isDetected = true;
+				for (auto i : circles)
+				{
+					center = Point(i[0], i[1]);
+					circle(frame, center, i[2], Scalar(0, 0, 255), 3);
+				}
+			}
+
+			int dx = center.x - 320;
+			int dy = (center.y - 240);
+			if (isRun && isDetected && (dx * dx + dy * dy > 50 * 50))
+			{
+				moveDXL(1, mydxl.getPresentPosition(1) - (dx / 320.0 + dy / 240.0) * 60, (dx / 320.0 + dy / 240.0) * 80);
+				moveDXL(2, mydxl.getPresentPosition(2) - (dx / 320.0 - dy / 240.0) * 60, (dx / 320.0 + dy / 240.0) * 80);
+			}
+			else if (isRun && isDetected && (dx * dx + dy * dy <= 50 * 50))
+			{
+				moveDXL(1, mydxl.getPresentPosition(1), 0);
+				moveDXL(2, mydxl.getPresentPosition(2), 0);
+			}
+
+			imshow(windowName, frame);
+
+			int opt = waitKey(30);
+			switch (opt)
+			{
+			case 'a':
+				isRun = !isRun;
+				break;
+			case 'p':
+				waitKey(0);
+				break;
+			case 'r':
+				mydxl.setGoalTorque(1, 1023);
+				mydxl.setGoalTorque(2, 1023);
+				moveDXL(1, 612, 40);
+				moveDXL(2, 412, 40);
+				break;
+			case 't':
+				mydxl.setGoalTorque(1, 1023);
+				mydxl.setGoalTorque(2, 1023);
+				break;
+			case ' ':
+				cout << mydxl.getPresentPosition(1) << " " << mydxl.getPresentPosition(2) << endl;
+				moveDXL(1, mydxl.getPresentPosition(1) - (dx / 320.0 + dy / 240.0) * 60, (dx / 320.0 + dy / 240.0) * 80);
+				moveDXL(2, mydxl.getPresentPosition(2) - (dx / 320.0 - dy / 240.0) * 60, (dx / 320.0 + dy / 240.0) * 80);
+				break;
+			case 'q':
+				mydxl.setLED(1, 0);
+				mydxl.setLED(2, 0);
+				return 1;
+			default:
+				break;
+			}
+		}
+	}
+	return 0;
+}
